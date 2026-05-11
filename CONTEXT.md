@@ -46,7 +46,7 @@ _Avoid_: dead bookmark, broken pin
 - A **Mark Action** does not shift existing **Window Marks** between **Mark Slots**.
 - A **Mark Action** fills the lowest empty **Mark Slot**; when all **Mark Slots** are full, it replaces the **Least Recently Used Window Mark**.
 - Jumping to a **Window Mark** refreshes its recent-use status.
-- Marking an already marked **Niri Window** keeps its **Mark Slot** and refreshes its recent-use status.
+- Marking an already marked **Niri Window** keeps its **Mark Slot** and refreshes its recent-use status and **Window Label**.
 - There is no explicit unmark command in the MVP; **Window Marks** are cleared by stale-window cleanup or LRU replacement.
 - MVP is daemon-only: IPC/keybindings provide behavior without a widget, launcher, or popout UI.
 - The daemon exposes `mark`, `jump`, and `status` IPC commands under DMS target `harpoonNiri`.
@@ -58,7 +58,7 @@ _Avoid_: dead bookmark, broken pin
 - Assigning a **Window Mark** to an occupied **Mark Slot** replaces the previous **Window Mark**.
 - A **Window Mark** stores niri window id, **Window Label**, marked-at time, and used-at time.
 - A **Window Mark** points at zero or one **Niri Window** after stale-window cleanup.
-- A **Stale Window Mark** is cleared automatically when its **Niri Window** disappears from the **Window Catalog**.
+- A **Stale Window Mark** is cleared automatically when its **Niri Window** disappears from the **Window Catalog**, and automatic cleanup notifies the user.
 - The **Window Catalog** contains zero or more **Niri Windows**.
 - **Window Marks** are validated against the **Window Catalog** before navigation.
 - Jumping validates the target exists, then focuses it through DMS `NiriService.focusWindow(windowId)`.

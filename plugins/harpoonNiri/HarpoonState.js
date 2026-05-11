@@ -1,20 +1,12 @@
-function findFocusedWindow(windows, workspaces) {
-    windows = windows || [];
-    workspaces = workspaces || {};
-    const focused = windows.find(window => window && window.is_focused === true);
-    if (focused)
-        return focused;
-
-    const workspaceList = Array.isArray(workspaces) ? workspaces : Object.values(workspaces);
-    const focusedWorkspace = workspaceList.find(workspace => workspace && workspace.is_focused === true);
-    if (!focusedWorkspace || focusedWorkspace.active_window_id === undefined || focusedWorkspace.active_window_id === null)
-        return null;
-
-    return windows.find(window => window && window.id == focusedWorkspace.active_window_id) || null;
+if (typeof require !== "undefined") {
+    var WindowCatalogModule = require("./WindowCatalog.js");
+    var WindowLabelModule = require("./WindowLabel.js");
 }
 
 function createHarpoonState(options) {
     const now = options && options.now ? options.now : () => Date.now();
+    const makeLabel = typeof labelFor === "function" ? labelFor : WindowLabelModule.labelFor;
+    const exists = typeof windowExists === "function" ? windowExists : WindowCatalogModule.windowExists;
     let slots = [null, null, null, null, null];
 
     function status() {
@@ -26,19 +18,13 @@ function createHarpoonState(options) {
         };
     }
 
-    function labelFor(window) {
-        return {
-            appId: window.app_id || "unknown",
-            title: window.title || ""
-        };
-    }
-
     function mark(window) {
         const timestamp = now();
         let slotIndex = slots.findIndex(slot => slot && slot.windowId === window.id);
         if (slotIndex >= 0) {
             const existing = slots[slotIndex];
             slots[slotIndex] = Object.assign({}, existing, {
+                label: makeLabel(window),
                 usedAt: timestamp
             });
             return {
@@ -59,7 +45,7 @@ function createHarpoonState(options) {
         }
         slots[slotIndex] = {
             windowId: window.id,
-            label: labelFor(window),
+            label: makeLabel(window),
             markedAt: timestamp,
             usedAt: timestamp
         };
@@ -67,11 +53,6 @@ function createHarpoonState(options) {
             code: code,
             slot: slotIndex + 1
         };
-    }
-
-    function windowExists(windows, windowId) {
-        windows = windows || [];
-        return windows.some(window => window && window.id == windowId);
     }
 
     function jump(slot, windows) {
@@ -92,7 +73,7 @@ function createHarpoonState(options) {
             };
         }
 
-        if (!windowExists(windows, mark.windowId)) {
+        if (!exists(windows, mark.windowId)) {
             slots[slotIndex] = null;
             return {
                 code: "STALE_MARK",
@@ -115,7 +96,7 @@ function createHarpoonState(options) {
     function syncWindowCatalog(windows) {
         const clearedSlots = [];
         slots = slots.map((mark, index) => {
-            if (mark && !windowExists(windows, mark.windowId)) {
+            if (mark && !exists(windows, mark.windowId)) {
                 clearedSlots.push(index + 1);
                 return null;
             }
@@ -133,5 +114,5 @@ function createHarpoonState(options) {
 }
 
 if (typeof module !== "undefined") {
-    module.exports = { createHarpoonState, findFocusedWindow };
+    module.exports = { createHarpoonState };
 }

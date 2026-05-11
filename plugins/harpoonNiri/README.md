@@ -36,4 +36,4 @@ binds {
 }
 ```
 
-`status()` returns JSON containing all five **Mark Slots**. `mark()` assigns focused **Niri Window** to lowest empty **Mark Slot**, refreshes existing slot for already marked window, or replaces the **Least Recently Used Window Mark** when full. `jump(slot)` focuses a valid **Window Mark** and refreshes recency; successful jumps are silent.
+`status()` returns JSON containing all five **Mark Slots**. `mark()` assigns focused **Niri Window** to lowest empty **Mark Slot**, refreshes existing slot and **Window Label** for already marked window, or replaces the **Least Recently Used Window Mark** when full. `jump(slot)` focuses a valid **Window Mark** and refreshes recency; successful jumps are silent. Automatic cleanup of **Stale Window Marks** notifies cleared slots.

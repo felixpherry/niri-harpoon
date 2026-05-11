@@ -1,0 +1,12 @@
+{
+  "name": "harpoon-niri",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.8"
+  }
+}
