@@ -2,7 +2,11 @@
 
 Daemon-only DMS plugin for five session-only **Window Marks** on niri.
 
+Harpoon Niri does not persist marks across DMS restart, niri restart, logout, or reboot. It does not edit niri config automatically; keybindings are manual opt-in.
+
 ## Install for development
+
+From this repository root, symlink the flat plugin directory into the DMS plugins directory and reload it:
 
 ```sh
 mkdir -p ~/.config/DankMaterialShell/plugins

@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: ready-for-human
 
 # Stale mark cleanup and manual install docs
 
@@ -25,3 +25,31 @@ Add README documentation for development installation by symlinking the repo plu
 ## Blocked by
 
 - .scratch/harpoon-niri/issues/02-jump-lru-replacement.md
+
+## Comments
+
+Implemented stale cleanup and finalized manual install docs:
+
+- `state.syncWindowCatalog(windows)` clears Window Marks whose Niri Window disappeared.
+- Daemon listens to `NiriService.windows` changes and syncs stale cleanup automatically.
+- Jumping a stale Window Mark now clears the Mark Slot, notifies, and does not focus.
+- Window Marks remain in-memory only; no persistence added.
+- README documents symlink install, plugin reload, IPC smoke tests, manual niri keybindings, session-only behavior, and no automatic niri config edits.
+
+Verification run:
+
+```sh
+node tests/harpoon-state.test.js
+node - <<'EOF'
+const fs = require('fs');
+const qml = fs.readFileSync('plugins/harpoonNiri/HarpoonNiri.qml', 'utf8');
+for (const text of ['function onWindowsChanged()', 'state.syncWindowCatalog(NiriService.windows || [])']) {
+  if (!qml.includes(text)) throw new Error(`missing ${text}`);
+}
+const readme = fs.readFileSync('plugins/harpoonNiri/README.md', 'utf8');
+for (const text of ['ln -sfn "$PWD/plugins/harpoonNiri"', 'dms ipc call harpoonNiri status', 'Mod+Alt+5', 'does not persist marks', 'does not edit niri config automatically']) {
+  if (!readme.includes(text)) throw new Error(`missing README ${text}`);
+}
+console.log('ok - stale cleanup wiring and docs present');
+EOF
+```

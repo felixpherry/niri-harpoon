@@ -9,6 +9,13 @@ QtObject {
     property var pluginService: null
     property var state: HarpoonState.createHarpoonState()
 
+    property Connections niriConnections: Connections {
+        target: NiriService
+        function onWindowsChanged() {
+            root.syncWindowCatalog();
+        }
+    }
+
     IpcHandler {
         target: "harpoonNiri"
 
@@ -83,6 +90,13 @@ QtObject {
 
         return "JUMP_FAILED";
     }
+
+    function syncWindowCatalog(): void {
+        if (isNiriAvailable())
+            state.syncWindowCatalog(NiriService.windows || []);
+    }
+
+    Component.onCompleted: syncWindowCatalog()
 
     function isNiriAvailable(): bool {
         return typeof CompositorService !== "undefined"

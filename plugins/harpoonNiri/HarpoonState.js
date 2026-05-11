@@ -69,6 +69,11 @@ function createHarpoonState(options) {
         };
     }
 
+    function windowExists(windows, windowId) {
+        windows = windows || [];
+        return windows.some(window => window && window.id == windowId);
+    }
+
     function jump(slot, windows) {
         const slotNumber = Number(slot);
         if (!isFinite(slotNumber) || Math.floor(slotNumber) !== slotNumber || slotNumber < 1 || slotNumber > 5) {
@@ -87,9 +92,8 @@ function createHarpoonState(options) {
             };
         }
 
-        windows = windows || [];
-        const targetExists = windows.some(window => window && window.id == mark.windowId);
-        if (!targetExists) {
+        if (!windowExists(windows, mark.windowId)) {
+            slots[slotIndex] = null;
             return {
                 code: "STALE_MARK",
                 slot: slotIndex + 1,
@@ -108,10 +112,23 @@ function createHarpoonState(options) {
         };
     }
 
+    function syncWindowCatalog(windows) {
+        const clearedSlots = [];
+        slots = slots.map((mark, index) => {
+            if (mark && !windowExists(windows, mark.windowId)) {
+                clearedSlots.push(index + 1);
+                return null;
+            }
+            return mark;
+        });
+        return { clearedSlots: clearedSlots };
+    }
+
     return {
         status,
         mark,
-        jump
+        jump,
+        syncWindowCatalog
     };
 }
 

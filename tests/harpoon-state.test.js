@@ -116,12 +116,12 @@ test('jumping to empty Mark Slot rejects without focus request', () => {
   assert.deepEqual(result, { code: 'EMPTY_SLOT', slot: 1 });
 });
 
-test('jumping to mark missing from Window Catalog rejects without focus request', () => {
+test('jumping to Stale Window Mark clears Mark Slot without focus request', () => {
   const state = createHarpoonState({ now: () => 1000 });
   state.mark({ id: 7, app_id: 'Alacritty', title: 'shell' });
 
   assert.deepEqual(state.jump(1, [{ id: 8 }]), { code: 'STALE_MARK', slot: 1, windowId: 7 });
-  assert.equal(state.status().slots[0].mark.usedAt, 1000);
+  assert.equal(state.status().slots[0].mark, null);
 });
 
 test('jumping with invalid slot input rejects without focus request', () => {
@@ -131,6 +131,18 @@ test('jumping with invalid slot input rejects without focus request', () => {
   assert.deepEqual(state.jump(0, [{ id: 7 }]), { code: 'INVALID_SLOT', slot: 0 });
   assert.deepEqual(state.jump(6, [{ id: 7 }]), { code: 'INVALID_SLOT', slot: 6 });
   assert.deepEqual(state.jump('wat', [{ id: 7 }]), { code: 'INVALID_SLOT', slot: 'wat' });
+});
+
+test('Window Marks are cleared automatically when Niri Window disappears from Window Catalog', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+  state.mark({ id: 2, app_id: 'b', title: 'two' });
+
+  const result = state.syncWindowCatalog([{ id: 2 }]);
+
+  assert.deepEqual(result, { clearedSlots: [1] });
+  assert.equal(state.status().slots[0].mark, null);
+  assert.equal(state.status().slots[1].mark.windowId, 2);
 });
 
 test('Mark Action replaces Least Recently Used Window Mark when all slots are full', () => {
