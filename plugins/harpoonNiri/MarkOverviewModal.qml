@@ -18,6 +18,9 @@ DankModal {
     property bool renameVisible: false
     property int dragSourceSlot: 0
     property int dragHoverSlot: 0
+    property bool dragActive: false
+    property real dragStartY: 0
+    property real dragCurrentY: 0
 
     readonly property int rowHeight: 72
     readonly property bool hasMarks: slots.some(slot => slot.mark !== null)
@@ -123,14 +126,44 @@ DankModal {
         refreshSlots();
     }
 
-    function dropDraggedSlot(targetSlot) {
-        if (dragSourceSlot <= 0 || targetSlot < 1 || targetSlot > 5)
+    function beginDraggedSlot(slot, y) {
+        dragSourceSlot = slot;
+        dragActive = true;
+        dragStartY = y;
+        dragCurrentY = y;
+        dragHoverSlot = targetSlotFromRowsY(y);
+    }
+
+    function updateDraggedSlot(y) {
+        if (!dragActive)
             return;
+        dragCurrentY = y;
+        dragHoverSlot = targetSlotFromRowsY(y);
+    }
+
+    function cancelDraggedSlot() {
+        dragActive = false;
+        dragSourceSlot = 0;
+        dragHoverSlot = 0;
+        dragStartY = 0;
+        dragCurrentY = 0;
+    }
+
+    function dropDraggedSlot(targetSlot) {
+        if (dragSourceSlot <= 0 || targetSlot < 1 || targetSlot > 5) {
+            cancelDraggedSlot();
+            return;
+        }
+        const sourceSlot = dragSourceSlot;
+        dragActive = false;
         if (backend && backend.swapOverviewSlots)
-            backend.swapOverviewSlots(dragSourceSlot, targetSlot);
+            backend.swapOverviewSlots(sourceSlot, targetSlot);
         selectedIndex = targetSlot - 1;
         keyboardNavigationActive = true;
         dragSourceSlot = 0;
+        dragHoverSlot = 0;
+        dragStartY = 0;
+        dragCurrentY = 0;
         refreshSlots();
     }
 
@@ -270,8 +303,7 @@ DankModal {
         renameVisible = false;
         renameText = "";
         renameError = "";
-        dragSourceSlot = 0;
-        dragHoverSlot = 0;
+        cancelDraggedSlot();
     }
 
     modalFocusScope.Keys.onPressed: function (event) {
@@ -341,6 +373,8 @@ DankModal {
                 return;
             }
         }
+
+        event.accepted = true;
     }
 
     content: Component {
@@ -423,6 +457,14 @@ DankModal {
                                 return rowMouse.containsMouse && modelData.mark ? Theme.primaryHoverLight : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency);
                             }
                             opacity: modelData.mark ? 1.0 : 0.74
+                            z: root.dragSourceSlot === modelData.slot ? 10 : 0
+                            transform: Translate {
+                                y: root.dragSourceSlot === modelData.slot ? root.dragCurrentY - root.dragStartY : 0
+                                Behavior on y {
+                                    enabled: !root.dragActive
+                                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                                }
+                            }
 
                             Rectangle {
                                 id: slotBadge
@@ -512,28 +554,27 @@ DankModal {
                                     preventStealing: true
                                     cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                                     onPressed: function (mouse) {
-                                        root.dragSourceSlot = modelData.slot;
                                         const point = mapToItem(slotsColumn, mouse.x, mouse.y);
-                                        root.dragHoverSlot = root.targetSlotFromRowsY(point.y);
+                                        root.beginDraggedSlot(modelData.slot, point.y);
+                                        mouse.accepted = true;
                                     }
                                     onPositionChanged: function (mouse) {
                                         if (!pressed)
                                             return;
                                         const point = mapToItem(slotsColumn, mouse.x, mouse.y);
-                                        root.dragHoverSlot = root.targetSlotFromRowsY(point.y);
+                                        root.updateDraggedSlot(point.y);
+                                        mouse.accepted = true;
                                     }
                                     onReleased: function (mouse) {
                                         const point = mapToItem(slotsColumn, mouse.x, mouse.y);
                                         const targetSlot = root.targetSlotFromRowsY(point.y);
                                         if (targetSlot > 0)
                                             root.dropDraggedSlot(targetSlot);
-                                        root.dragSourceSlot = 0;
-                                        root.dragHoverSlot = 0;
+                                        else
+                                            root.cancelDraggedSlot();
+                                        mouse.accepted = true;
                                     }
-                                    onCanceled: {
-                                        root.dragSourceSlot = 0;
-                                        root.dragHoverSlot = 0;
-                                    }
+                                    onCanceled: root.cancelDraggedSlot()
                                 }
                             }
 
@@ -580,8 +621,8 @@ DankModal {
 
                 Row {
                     width: parent.width
-                    height: 34
-                    spacing: Theme.spacingM
+                    height: 26
+                    spacing: Theme.spacingS
 
                     Repeater {
                         model: [
@@ -597,22 +638,20 @@ DankModal {
                             required property var modelData
 
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.spacingXS
+                            spacing: 4
 
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
-                                height: 24
-                                width: keyText.implicitWidth + Theme.spacingM
-                                radius: Theme.cornerRadius / 2
+                                height: 20
+                                width: keyText.implicitWidth + Theme.spacingS
+                                radius: 6
                                 color: Theme.surfaceVariantAlpha
-                                border.color: Theme.outlineMedium
-                                border.width: 1
 
                                 StyledText {
                                     id: keyText
                                     anchors.centerIn: parent
                                     text: modelData.key
-                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.pixelSize: Theme.fontSizeSmall - 1
                                     font.weight: Font.Medium
                                     color: Theme.surfaceText
                                 }
@@ -621,7 +660,7 @@ DankModal {
                             StyledText {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: modelData.label
-                                font.pixelSize: Theme.fontSizeSmall
+                                font.pixelSize: Theme.fontSizeSmall - 1
                                 color: Theme.surfaceVariantText
                             }
                         }
@@ -751,6 +790,7 @@ DankModal {
                 event.accepted = true;
                 return;
             }
+            event.accepted = true;
         }
     }
 }
