@@ -1,0 +1,13 @@
+{
+  "id": "harpoonNiri",
+  "name": "Harpoon Niri",
+  "description": "Daemon-only niri Window Mark IPC commands",
+  "version": "0.1.0",
+  "author": "Felix P.",
+  "icon": "push_pin",
+  "type": "daemon",
+  "capabilities": ["daemon"],
+  "component": "./HarpoonNiri.qml",
+  "requires_dms": ">=1.4.0",
+  "permissions": []
+}
