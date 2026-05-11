@@ -139,6 +139,46 @@ test('jump to Stale Window Mark clears slot and returns notification result', ()
   expect(commands.status().slots[0].mark).toBe(null);
 });
 
+test('clear IPC clears occupied Mark Slot and stays quiet', () => {
+  const { adapter } = fakeAdapter({
+    windows: () => [{ id: 7, app_id: 'Alacritty', title: 'shell', is_focused: true }],
+  });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+
+  expect(commands.clearSlot(1)).toEqual({ ipc: 'CLEARED_SLOT_1', notifications: [] });
+  expect(commands.status().slots[0].mark).toBe(null);
+});
+
+test('clear IPC reports empty and invalid slots quietly', () => {
+  const { adapter } = fakeAdapter();
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+
+  expect(commands.clearSlot(3)).toEqual({ ipc: 'EMPTY_SLOT_3', notifications: [] });
+  expect(commands.clearSlot(9)).toEqual({ ipc: 'INVALID_SLOT', notifications: [] });
+});
+
+test('clearAll IPC clears marks and stays quiet', () => {
+  let focusedId = 1;
+  const { adapter } = fakeAdapter({
+    windows: () => [1, 2].map(id => ({ id, app_id: `app-${id}`, title: `window-${id}`, is_focused: id === focusedId })),
+  });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+  focusedId = 2;
+  commands.markFocused();
+
+  expect(commands.clearAll()).toEqual({ ipc: 'CLEARED_ALL', notifications: [] });
+  expect(commands.status().slots.map(slot => slot.mark)).toEqual([null, null, null, null, null]);
+});
+
+test('clearAll IPC reports no marks quietly', () => {
+  const { adapter } = fakeAdapter();
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+
+  expect(commands.clearAll()).toEqual({ ipc: 'NO_MARKS', notifications: [] });
+});
+
 test('Window Catalog sync reports cleared Stale Window Marks and notifications', () => {
   let windows = [{ id: 7, app_id: 'Alacritty', title: 'shell', is_focused: true }];
   const { adapter } = fakeAdapter({ windows: () => windows });
@@ -150,4 +190,18 @@ test('Window Catalog sync reports cleared Stale Window Marks and notifications',
     clearedSlots: [1],
     notifications: ['Mark Slot 1 window is no longer available'],
   });
+});
+
+test('Window Catalog sync can silently clear Stale Window Marks for overview open', () => {
+  let windows = [{ id: 7, app_id: 'Alacritty', title: 'shell', is_focused: true }];
+  const { adapter } = fakeAdapter({ windows: () => windows });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+
+  windows = [];
+  expect(commands.syncWindowCatalog(true)).toEqual({
+    clearedSlots: [1],
+    notifications: [],
+  });
+  expect(commands.status().slots[0].mark).toBe(null);
 });

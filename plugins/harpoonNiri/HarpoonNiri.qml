@@ -35,6 +35,25 @@ PluginComponent {
             root.notifyAll(result.notifications);
             return result.ipc;
         }
+
+        function clear(slot: string): string {
+            const result = root.ensureCommands().clearSlot(slot);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function clearAll(): string {
+            const result = root.ensureCommands().clearAll();
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function toggleOverview(): string {
+            overviewModal.toggle();
+            return overviewModal.shouldBeVisible ? "OVERVIEW_OPEN" : "OVERVIEW_CLOSED";
+        }
     }
 
     function ensureCommands() {
@@ -53,12 +72,51 @@ PluginComponent {
         return commands;
     }
 
-    function syncWindowCatalog() {
-        const result = root.ensureCommands().syncWindowCatalog();
+    function syncWindowCatalog(silent) {
+        const result = root.ensureCommands().syncWindowCatalog(silent === true);
         root.notifyAll(result.notifications);
+        overviewModal.refreshSlots();
     }
 
-    Component.onCompleted: syncWindowCatalog()
+    Component.onCompleted: syncWindowCatalog(false)
+
+    QtObject {
+        id: overviewBackend
+
+        function onOverviewOpening() {
+            root.syncWindowCatalog(true);
+        }
+
+        function overviewSlots() {
+            return root.ensureCommands().status().slots;
+        }
+
+        function activateOverviewSlot(slot) {
+            const result = root.ensureCommands().jumpSlot(slot);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function clearOverviewSlot(slot) {
+            const result = root.ensureCommands().clearSlot(slot);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function clearOverviewAll() {
+            const result = root.ensureCommands().clearAll();
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+    }
+
+    MarkOverviewModal {
+        id: overviewModal
+        backend: overviewBackend
+    }
 
     function isNiriAvailable(): bool {
         return typeof CompositorService !== "undefined"

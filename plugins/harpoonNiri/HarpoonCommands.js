@@ -79,19 +79,39 @@ function createHarpoonCommands(options) {
         return result("JUMP_FAILED");
     }
 
-    function syncWindowCatalog() {
+    function clearSlot(slot) {
+        const clearResult = state.clear(slot);
+
+        if (clearResult.code === "CLEARED_SLOT")
+            return result(`CLEARED_SLOT_${clearResult.slot}`);
+
+        if (clearResult.code === "EMPTY_SLOT")
+            return result(`EMPTY_SLOT_${clearResult.slot}`);
+
+        if (clearResult.code === "INVALID_SLOT")
+            return result("INVALID_SLOT");
+
+        return result("CLEAR_FAILED");
+    }
+
+    function clearAll() {
+        const clearResult = state.clearAll();
+        return result(clearResult.code === "CLEARED_ALL" ? "CLEARED_ALL" : "NO_MARKS");
+    }
+
+    function syncWindowCatalog(silent) {
         if (!isNiriAvailable())
             return { clearedSlots: [], notifications: [] };
 
         const syncResult = state.syncWindowCatalog(windows());
-        const notifications = syncResult.clearedSlots.map(slot => `Mark Slot ${slot} window is no longer available`);
+        const notifications = silent ? [] : syncResult.clearedSlots.map(slot => `Mark Slot ${slot} window is no longer available`);
         return {
             clearedSlots: syncResult.clearedSlots,
             notifications: notifications
         };
     }
 
-    return { status, markFocused, jumpSlot, syncWindowCatalog };
+    return { status, markFocused, jumpSlot, clearSlot, clearAll, syncWindowCatalog };
 }
 
 if (typeof module !== "undefined") {

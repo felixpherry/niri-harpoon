@@ -55,9 +55,16 @@ function createHarpoonState(options) {
         };
     }
 
-    function jump(slot, windows) {
+    function validSlotNumber(slot) {
         const slotNumber = Number(slot);
-        if (!isFinite(slotNumber) || Math.floor(slotNumber) !== slotNumber || slotNumber < 1 || slotNumber > 5) {
+        if (!isFinite(slotNumber) || Math.floor(slotNumber) !== slotNumber || slotNumber < 1 || slotNumber > 5)
+            return null;
+        return slotNumber;
+    }
+
+    function jump(slot, windows) {
+        const slotNumber = validSlotNumber(slot);
+        if (slotNumber === null) {
             return {
                 code: "INVALID_SLOT",
                 slot: slot
@@ -93,6 +100,44 @@ function createHarpoonState(options) {
         };
     }
 
+    function clear(slot) {
+        const slotNumber = validSlotNumber(slot);
+        if (slotNumber === null) {
+            return {
+                code: "INVALID_SLOT",
+                slot: slot
+            };
+        }
+
+        const slotIndex = slotNumber - 1;
+        if (!slots[slotIndex]) {
+            return {
+                code: "EMPTY_SLOT",
+                slot: slotNumber
+            };
+        }
+
+        slots[slotIndex] = null;
+        return {
+            code: "CLEARED_SLOT",
+            slot: slotNumber
+        };
+    }
+
+    function clearAll() {
+        const clearedSlots = [];
+        slots = slots.map((mark, index) => {
+            if (mark)
+                clearedSlots.push(index + 1);
+            return null;
+        });
+
+        return {
+            code: clearedSlots.length > 0 ? "CLEARED_ALL" : "NO_MARKS",
+            clearedSlots: clearedSlots
+        };
+    }
+
     function syncWindowCatalog(windows) {
         const clearedSlots = [];
         slots = slots.map((mark, index) => {
@@ -109,6 +154,8 @@ function createHarpoonState(options) {
         status,
         mark,
         jump,
+        clear,
+        clearAll,
         syncWindowCatalog
     };
 }

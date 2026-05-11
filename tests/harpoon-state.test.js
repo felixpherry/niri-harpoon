@@ -122,6 +122,45 @@ test('jumping with invalid slot input rejects without focus request', () => {
   expect(state.jump('wat', [{ id: 7 }])).toEqual({ code: 'INVALID_SLOT', slot: 'wat' });
 });
 
+test('Clear Mark Action clears occupied Mark Slot without shifting other Mark Slots', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+  state.mark({ id: 2, app_id: 'b', title: 'two' });
+  state.mark({ id: 3, app_id: 'c', title: 'three' });
+
+  expect(state.clear(2)).toEqual({ code: 'CLEARED_SLOT', slot: 2 });
+  expect(state.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([1, null, 3, null, null]);
+});
+
+test('Clear Mark Action reports empty Mark Slot', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+
+  expect(state.clear(4)).toEqual({ code: 'EMPTY_SLOT', slot: 4 });
+});
+
+test('Clear Mark Action reports invalid slots', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+
+  expect(state.clear(0)).toEqual({ code: 'INVALID_SLOT', slot: 0 });
+  expect(state.clear(6)).toEqual({ code: 'INVALID_SLOT', slot: 6 });
+  expect(state.clear('wat')).toEqual({ code: 'INVALID_SLOT', slot: 'wat' });
+});
+
+test('Clear Mark Action clears all occupied Mark Slots', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+  state.mark({ id: 2, app_id: 'b', title: 'two' });
+
+  expect(state.clearAll()).toEqual({ code: 'CLEARED_ALL', clearedSlots: [1, 2] });
+  expect(state.status().slots.map(slot => slot.mark)).toEqual([null, null, null, null, null]);
+});
+
+test('Clear Mark Action reports no marks when all Mark Slots are empty', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+
+  expect(state.clearAll()).toEqual({ code: 'NO_MARKS', clearedSlots: [] });
+});
+
 test('Window Marks are cleared automatically when Niri Window disappears from Window Catalog', () => {
   const state = createHarpoonState({ now: () => 1000 });
   state.mark({ id: 1, app_id: 'a', title: 'one' });
