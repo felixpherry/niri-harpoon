@@ -46,6 +46,7 @@ function createHarpoonState(options) {
         slots[slotIndex] = {
             windowId: window.id,
             label: makeLabel(window),
+            customDisplayName: "",
             markedAt: timestamp,
             usedAt: timestamp
         };
@@ -60,6 +61,80 @@ function createHarpoonState(options) {
         if (!isFinite(slotNumber) || Math.floor(slotNumber) !== slotNumber || slotNumber < 1 || slotNumber > 5)
             return null;
         return slotNumber;
+    }
+
+    function normalizeDisplayName(displayName) {
+        return String(displayName === undefined || displayName === null ? "" : displayName)
+            .trim()
+            .replace(/[ \t\r\n]*[\t\r\n][ \t\r\n]*/g, " ");
+    }
+
+    function rename(slot, displayName) {
+        const slotNumber = validSlotNumber(slot);
+        if (slotNumber === null) {
+            return {
+                code: "INVALID_SLOT",
+                slot: slot
+            };
+        }
+
+        const slotIndex = slotNumber - 1;
+        const mark = slots[slotIndex];
+        if (!mark) {
+            return {
+                code: "EMPTY_SLOT",
+                slot: slotNumber
+            };
+        }
+
+        const normalized = normalizeDisplayName(displayName);
+        if (normalized.length > 80) {
+            return {
+                code: "DISPLAY_NAME_TOO_LONG",
+                slot: slotNumber
+            };
+        }
+
+        slots[slotIndex] = Object.assign({}, mark, {
+            customDisplayName: normalized,
+            usedAt: now()
+        });
+        return {
+            code: normalized.length > 0 ? "RENAMED_SLOT" : "CLEARED_NAME_SLOT",
+            slot: slotNumber
+        };
+    }
+
+    function swap(sourceSlot, targetSlot) {
+        const sourceSlotNumber = validSlotNumber(sourceSlot);
+        const targetSlotNumber = validSlotNumber(targetSlot);
+        if (sourceSlotNumber === null || targetSlotNumber === null) {
+            return {
+                code: "INVALID_SLOT",
+                sourceSlot: sourceSlot,
+                targetSlot: targetSlot
+            };
+        }
+
+        if (sourceSlotNumber === targetSlotNumber) {
+            return {
+                code: "SWAP_NOOP_SLOT",
+                slot: sourceSlotNumber
+            };
+        }
+
+        const sourceIndex = sourceSlotNumber - 1;
+        const targetIndex = targetSlotNumber - 1;
+        const sourceMark = slots[sourceIndex];
+        const targetMark = slots[targetIndex];
+        slots[targetIndex] = sourceMark ? Object.assign({}, sourceMark, { usedAt: now() }) : null;
+        slots[sourceIndex] = targetMark;
+
+        return {
+            code: "SWAPPED_SLOTS",
+            sourceSlot: sourceSlotNumber,
+            targetSlot: targetSlotNumber
+        };
     }
 
     function jump(slot, windows) {
@@ -156,6 +231,8 @@ function createHarpoonState(options) {
         jump,
         clear,
         clearAll,
+        rename,
+        swap,
         syncWindowCatalog
     };
 }

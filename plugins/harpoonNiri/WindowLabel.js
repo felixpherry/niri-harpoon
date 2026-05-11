@@ -8,8 +8,9 @@ function labelFor(window) {
 function labelText(label) {
     if (!label)
         return "unknown";
-    if (label.title && label.title.length > 0)
-        return `${label.appId} — ${label.title}`;
+    const displayTitle = label.customDisplayName && label.customDisplayName.length > 0 ? label.customDisplayName : label.title;
+    if (displayTitle && displayTitle.length > 0)
+        return `${label.appId} — ${displayTitle}`;
     return label.appId || "unknown";
 }
 

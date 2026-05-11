@@ -50,6 +50,20 @@ PluginComponent {
             return result.ipc;
         }
 
+        function rename(slot: string, displayName: string): string {
+            const result = root.ensureCommands().renameSlot(slot, displayName);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function swap(sourceSlot: string, targetSlot: string): string {
+            const result = root.ensureCommands().swapSlots(sourceSlot, targetSlot);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
         function toggleOverview(): string {
             overviewModal.toggle();
             return overviewModal.shouldBeVisible ? "OVERVIEW_OPEN" : "OVERVIEW_CLOSED";
@@ -107,6 +121,20 @@ PluginComponent {
 
         function clearOverviewAll() {
             const result = root.ensureCommands().clearAll();
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function renameOverviewSlot(slot, displayName) {
+            const result = root.ensureCommands().renameSlot(slot, displayName);
+            root.notifyAll(result.notifications);
+            overviewModal.refreshSlots();
+            return result.ipc;
+        }
+
+        function swapOverviewSlots(sourceSlot, targetSlot) {
+            const result = root.ensureCommands().swapSlots(sourceSlot, targetSlot);
             root.notifyAll(result.notifications);
             overviewModal.refreshSlots();
             return result.ipc;

@@ -24,6 +24,7 @@ test('Mark Action stores focused Niri Window in slot 1 when empty', () => {
     mark: {
       windowId: 7,
       label: { appId: 'Alacritty', title: 'shell' },
+      customDisplayName: '',
       markedAt: 1000,
       usedAt: 1000,
     },
@@ -59,6 +60,7 @@ test('Mark Action on already marked Niri Window keeps slot and refreshes used-at
   expect(state.status().slots[0].mark).toEqual({
     windowId: 1,
     label: { appId: 'a', title: 'one renamed' },
+    customDisplayName: '',
     markedAt: 1000,
     usedAt: 3000,
   });
@@ -188,4 +190,125 @@ test('Mark Action replaces Least Recently Used Window Mark when all slots are fu
   expect(result.code).toBe('MARK_REPLACED');
   expect(result.slot).toBe(2);
   expect(state.status().slots.map(slot => slot.mark.windowId)).toEqual([1, 6, 3, 4, 5]);
+});
+
+test('Custom Display Name can be set, inspected, normalized, cleared, and uses status empty string', () => {
+  let clock = 1000;
+  const state = createHarpoonState({ now: () => clock });
+  state.mark({ id: 7, app_id: 'Alacritty', title: 'shell' });
+
+  clock = 2000;
+  expect(state.rename(1, '  build\nログ\tmain  ')).toEqual({ code: 'RENAMED_SLOT', slot: 1 });
+  expect(state.status().slots[0].mark.customDisplayName).toBe('build ログ main');
+  expect(state.status().slots[0].mark.usedAt).toBe(2000);
+
+  clock = 3000;
+  expect(state.rename(1, '   ')).toEqual({ code: 'CLEARED_NAME_SLOT', slot: 1 });
+  expect(state.status().slots[0].mark.customDisplayName).toBe('');
+  expect(state.status().slots[0].mark.usedAt).toBe(3000);
+});
+
+test('Custom Display Name rejects invalid, empty, and too-long rename inputs without changing state', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 7, app_id: 'Alacritty', title: 'shell' });
+
+  expect(state.rename(0, 'name')).toEqual({ code: 'INVALID_SLOT', slot: 0 });
+  expect(state.rename(2, 'name')).toEqual({ code: 'EMPTY_SLOT', slot: 2 });
+  expect(state.rename(1, 'x'.repeat(81))).toEqual({ code: 'DISPLAY_NAME_TOO_LONG', slot: 1 });
+  expect(state.status().slots[0].mark.customDisplayName).toBe('');
+});
+
+test('Custom Display Name survives re-mark and is discarded on LRU replacement', () => {
+  let clock = 1000;
+  const state = createHarpoonState({ now: () => clock });
+  state.mark({ id: 1, app_id: 'app-1', title: 'one' });
+  state.rename(1, 'primary');
+
+  clock = 2000;
+  state.mark({ id: 1, app_id: 'app-1', title: 'one changed' });
+  expect(state.status().slots[0].mark.label.title).toBe('one changed');
+  expect(state.status().slots[0].mark.customDisplayName).toBe('primary');
+
+  for (let id = 2; id <= 5; id++) {
+    clock += 1000;
+    state.mark({ id, app_id: `app-${id}`, title: `window-${id}` });
+  }
+  clock = 7000;
+  state.mark({ id: 6, app_id: 'app-6', title: 'window-6' });
+
+  expect(state.status().slots[0].mark.windowId).toBe(6);
+  expect(state.status().slots[0].mark.customDisplayName).toBe('');
+});
+
+test('Rename refreshes recent-use status so LRU replacement keeps renamed Window Mark', () => {
+  let clock = 1000;
+  const state = createHarpoonState({ now: () => clock });
+  for (let id = 1; id <= 5; id++) {
+    state.mark({ id, app_id: `app-${id}`, title: `window-${id}` });
+    clock += 1000;
+  }
+
+  clock = 7000;
+  state.rename(1, 'keep');
+  clock = 8000;
+  const result = state.mark({ id: 6, app_id: 'app-6', title: 'window-6' });
+
+  expect(result.slot).toBe(2);
+  expect(state.status().slots.map(slot => slot.mark.windowId)).toEqual([1, 6, 3, 4, 5]);
+});
+
+test('Move Mark Action swaps occupied Mark Slots and refreshes source mark only', () => {
+  let clock = 1000;
+  const state = createHarpoonState({ now: () => clock });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+  clock = 2000;
+  state.mark({ id: 2, app_id: 'b', title: 'two' });
+
+  clock = 3000;
+  expect(state.swap(1, 2)).toEqual({ code: 'SWAPPED_SLOTS', sourceSlot: 1, targetSlot: 2 });
+
+  expect(state.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([2, 1, null, null, null]);
+  expect(state.status().slots[1].mark.usedAt).toBe(3000);
+  expect(state.status().slots[0].mark.usedAt).toBe(2000);
+});
+
+test('Move Mark Action swaps occupied and empty Mark Slots without compaction', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+  state.mark({ id: 2, app_id: 'b', title: 'two' });
+
+  expect(state.swap(1, 4)).toEqual({ code: 'SWAPPED_SLOTS', sourceSlot: 1, targetSlot: 4 });
+  expect(state.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([null, 2, null, 1, null]);
+
+  expect(state.swap(3, 5)).toEqual({ code: 'SWAPPED_SLOTS', sourceSlot: 3, targetSlot: 5 });
+  expect(state.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([null, 2, null, 1, null]);
+
+  expect(state.swap(1, 2)).toEqual({ code: 'SWAPPED_SLOTS', sourceSlot: 1, targetSlot: 2 });
+  expect(state.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([2, null, null, 1, null]);
+});
+
+test('Move Mark Action reports same-slot no-op and invalid slots', () => {
+  const state = createHarpoonState({ now: () => 1000 });
+  state.mark({ id: 1, app_id: 'a', title: 'one' });
+
+  expect(state.swap(1, 1)).toEqual({ code: 'SWAP_NOOP_SLOT', slot: 1 });
+  expect(state.swap(0, 1)).toEqual({ code: 'INVALID_SLOT', sourceSlot: 0, targetSlot: 1 });
+  expect(state.swap(1, 6)).toEqual({ code: 'INVALID_SLOT', sourceSlot: 1, targetSlot: 6 });
+});
+
+test('Move Mark Action refreshes recency so LRU replacement keeps moved source mark', () => {
+  let clock = 1000;
+  const state = createHarpoonState({ now: () => clock });
+  for (let id = 1; id <= 5; id++) {
+    state.mark({ id, app_id: `app-${id}`, title: `window-${id}` });
+    clock += 1000;
+  }
+
+  clock = 7000;
+  state.swap(1, 5);
+  clock = 8000;
+  const result = state.mark({ id: 6, app_id: 'app-6', title: 'window-6' });
+
+  expect(result.slot).toBe(2);
+  expect(state.status().slots.map(slot => slot.mark.windowId)).toEqual([5, 6, 3, 4, 1]);
 });

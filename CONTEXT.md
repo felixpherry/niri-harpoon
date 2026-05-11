@@ -23,8 +23,12 @@ The **Window Mark** with the oldest mark-or-jump interaction among occupied **Ma
 _Avoid_: oldest mark
 
 **Window Label**:
-The stored app id and title used to describe a **Window Mark** in user feedback.
-_Avoid_: display name, caption
+The stored app id, title, and optional custom display name used to describe a **Window Mark** in user feedback.
+_Avoid_: caption
+
+**Custom Display Name**:
+A user-provided name for a **Window Mark** that overrides the window title in user-facing mark text.
+_Avoid_: rename app, app name, caption
 
 **Niri Window**:
 A window reported by niri through DMS `NiriService.windows` and identified by niri window id.
@@ -42,6 +46,10 @@ _Avoid_: dead bookmark, broken pin
 The user command that removes one or all **Window Marks** from **Mark Slots** while leaving the **Mark Slots** empty and available.
 _Avoid_: delete slot, remove slot
 
+**Move Mark Action**:
+The user command that swaps a **Window Mark** with an adjacent **Mark Slot**.
+_Avoid_: reorder app, sort, compact
+
 **Mark Overview**:
 An overlay that shows all five **Mark Slots** and lets the user jump to or clear **Window Marks**.
 _Avoid_: launcher, widget, slot editor
@@ -52,16 +60,21 @@ _Avoid_: launcher, widget, slot editor
 - A **Mark Action** assigns the focused **Niri Window** automatically rather than asking the user for a **Mark Slot**.
 - The focused **Niri Window** is found from `is_focused`, with focused workspace active-window data as fallback.
 - A **Mark Action** does not shift existing **Window Marks** between **Mark Slots**.
+- A **Custom Display Name** defaults to empty; when empty, user-facing mark text uses the **Niri Window** title.
+- A **Custom Display Name** replaces only the title portion of **Window Label** text; app id and icon remain based on the **Niri Window**.
+- When a **Custom Display Name** exists, title changes on the underlying **Niri Window** do not change displayed mark text until the **Custom Display Name** is cleared.
+- Notifications describe a named **Window Mark** as app id followed by **Custom Display Name**.
 - A **Mark Action** fills the lowest empty **Mark Slot**; when all **Mark Slots** are full, it replaces the **Least Recently Used Window Mark**.
 - Jumping to a **Window Mark** refreshes its recent-use status.
-- Marking an already marked **Niri Window** keeps its **Mark Slot** and refreshes its recent-use status and **Window Label**.
+- Marking an already marked **Niri Window** keeps its **Mark Slot**, refreshes its recent-use status and raw **Window Label**, and preserves its **Custom Display Name**.
 - A **Clear Mark Action** clears one **Window Mark** or all **Window Marks** without deleting, shifting, or renumbering **Mark Slots**.
 - The **Mark Overview** shows exactly five **Mark Slots**.
 - Activating an occupied **Mark Slot** in the **Mark Overview** jumps to that **Window Mark** and closes the **Mark Overview**.
 - While the **Mark Overview** is open, pressing `1` through `5` jumps to the corresponding occupied **Mark Slot** without requiring modifier keys.
 - While the **Mark Overview** is open, pressing `Enter` jumps to the selected occupied **Mark Slot**.
-- Opening the **Mark Overview** selects **Mark Slot** 1 by default.
+- Opening the **Mark Overview** selects the first occupied **Mark Slot** by default; if no **Window Marks** exist, no **Mark Slot** is selected.
 - While the **Mark Overview** is open, `Ctrl+J` and `Ctrl+K` move selection through **Mark Slots** with wraparound.
+- While the **Mark Overview** is open, pressing `R` on an occupied **Mark Slot** opens a rename modal for its **Custom Display Name**.
 - While the **Mark Overview** is open, arrow keys also move selection through **Mark Slots** with wraparound.
 - While the **Mark Overview** is open, `Delete` opens a confirmation modal for clearing the selected occupied **Mark Slot**.
 - Clear-one confirmation title follows "Clear Mark Slot n?" and explains the slot will become empty.
@@ -71,6 +84,7 @@ _Avoid_: launcher, widget, slot editor
 - While the clear confirmation modal is open, other **Mark Overview** actions are blocked until the modal is confirmed or cancelled.
 - Pressing `Delete` again in the clear confirmation modal does not confirm clearing.
 - Empty **Mark Slots** in the **Mark Overview** are visible but inactive and do not notify when clicked or selected by number key.
+- Empty **Mark Slots** cannot be renamed.
 - Each occupied **Mark Slot** in the **Mark Overview** shows its slot number, app icon when available, and **Window Label** with app id above title.
 - If an occupied **Mark Slot** has no window title, the **Mark Overview** shows a muted "No title" placeholder.
 - Each empty **Mark Slot** in the **Mark Overview** shows its slot number and empty state.
@@ -79,10 +93,20 @@ _Avoid_: launcher, widget, slot editor
 - Clearing all **Window Marks** from the **Mark Overview** requires a confirmation modal and has no keyboard shortcut.
 - Clear-all confirmation title follows "Clear All Harpoon Marks?" and explains all five **Mark Slots** will become empty.
 - In the **Mark Overview**, clicking an occupied **Mark Slot** row jumps to that **Window Mark**.
-- In the **Mark Overview**, per-slot clear controls appear only for occupied **Mark Slots** at the right edge of their rows.
+- In the **Mark Overview**, per-slot drag-handle, rename, and clear controls appear only for occupied **Mark Slots** at the right edge of their rows.
+- Dragging to reorder starts from the per-slot drag handle rather than the whole **Mark Slot** row.
+- During drag reorder, each **Mark Slot** row is a drop target and highlights when hovered.
+- Dropping a dragged **Window Mark** outside **Mark Slot** rows cancels the reorder.
 - In the **Mark Overview**, the clear-all control remains visible in the header and is disabled when all **Mark Slots** are empty.
-- The **Mark Overview** footer shows keyboard hints for `1-5` jump, `Ctrl+J/K` move, `Del` clear, and `Esc` close.
+- The **Mark Overview** footer shows keyboard hints for `1-5` jump, `Ctrl+J/K` select, `Ctrl+Shift+J/K` move, `R` rename, `Del` clear, and `Esc` close.
 - Clearing **Window Marks** from the **Mark Overview** does not notify; the updated **Mark Overview** is the feedback.
+- The rename modal is prefilled with the current **Custom Display Name** when present, otherwise the current **Niri Window** title.
+- Pressing `Enter` in the rename modal saves the trimmed **Custom Display Name** and returns to the **Mark Overview**.
+- Saving an empty or whitespace-only **Custom Display Name** clears it and restores title fallback.
+- A **Custom Display Name** may contain at most 80 characters after trimming.
+- A **Custom Display Name** allows Unicode text; internal newlines and tabs are normalized to single spaces.
+- Setting or clearing a **Custom Display Name** refreshes recent-use status for that **Window Mark**.
+- Pressing `Escape` in the rename modal cancels without changing the **Custom Display Name** and returns to the **Mark Overview**.
 - Successful `clear(slot)` IPC calls return `CLEARED_SLOT_n` and do not notify.
 - `clear(slot)` on an empty **Mark Slot** returns `EMPTY_SLOT_n` and does not notify.
 - Successful `clearAll` IPC calls return `CLEARED_ALL` and do not notify.
@@ -90,8 +114,20 @@ _Avoid_: launcher, widget, slot editor
 - `clear(slot)` with an invalid slot returns `INVALID_SLOT` and does not notify.
 - There is no explicit unmark command in the MVP; **Window Marks** are cleared by stale-window cleanup or LRU replacement.
 - Harpoon Niri remains a daemon plugin even when it owns the **Mark Overview** overlay.
-- The daemon exposes `mark`, `jump`, `clear`, `clearAll`, `status`, and `toggleOverview` IPC commands under DMS target `harpoonNiri`.
-- `status` IPC output is debug-oriented mark state and does not include **Mark Overview** UI state.
+- The daemon exposes `mark`, `jump`, `clear`, `clearAll`, `rename`, `swap`, `status`, and `toggleOverview` IPC commands under DMS target `harpoonNiri`.
+- `rename(slot, displayName)` sets or clears the **Custom Display Name** for one occupied **Mark Slot** without validating targets against the **Window Catalog**.
+- `rename(slot, displayName)` with an invalid slot returns `INVALID_SLOT` and does not notify.
+- `rename(slot, displayName)` on an empty **Mark Slot** returns `EMPTY_SLOT_n` and does not notify.
+- Successful `rename(slot, displayName)` with non-empty display name returns `RENAMED_SLOT_n` and does not notify.
+- Successful `rename(slot, displayName)` with empty display name returns `CLEARED_NAME_SLOT_n` and does not notify.
+- `rename(slot, displayName)` with more than 80 characters after trimming returns `DISPLAY_NAME_TOO_LONG` and does not notify.
+- `swap(sourceSlot, targetSlot)` swaps the contents of two **Mark Slots** without validating targets against the **Window Catalog**.
+- `swap(sourceSlot, targetSlot)` allows empty **Mark Slots** as either source or target.
+- `swap(sourceSlot, targetSlot)` with any invalid slot returns `INVALID_SLOT` and does not notify.
+- `swap(sourceSlot, targetSlot)` with identical slots returns `SWAP_NOOP_SLOT_n` and does not notify.
+- Successful `swap(sourceSlot, targetSlot)` returns `SWAPPED_SLOTS_a_b` and does not notify.
+- `status` IPC output is debug-oriented mark state, includes **Custom Display Name** state for each **Window Mark**, and does not include **Mark Overview** UI state.
+- Empty **Custom Display Name** values appear as `""` in `status` output rather than `null` or omitted.
 - When niri is unavailable, mark and jump commands return `NIRI_NOT_AVAILABLE` and notify the user.
 - Niri keybindings are installed manually by the user from a documented config snippet; the plugin does not modify compositor config.
 - `Mod+H` toggles the **Mark Overview** through the `toggleOverview` IPC command.
@@ -108,7 +144,15 @@ _Avoid_: launcher, widget, slot editor
 - The **Mark Overview** uses DMS modal primitives such as `DankModal` and `ConfirmModal` rather than registering as a launcher plugin.
 - A **Niri Window** may be pointed at by at most one **Window Mark**.
 - Assigning a marked **Niri Window** to a different **Mark Slot** moves the **Window Mark**.
-- Assigning a **Window Mark** to an occupied **Mark Slot** replaces the previous **Window Mark**.
+- Assigning a **Window Mark** to an occupied **Mark Slot** replaces the previous **Window Mark** and discards its **Custom Display Name**.
+- Reordering **Window Marks** means moving existing **Window Marks** between **Mark Slots**.
+- A **Move Mark Action** swaps the selected **Window Mark** with the adjacent **Mark Slot**, including empty **Mark Slots**.
+- A **Move Mark Action** does not compact occupied **Mark Slots** or skip empty **Mark Slots**.
+- A **Move Mark Action** at the first or last **Mark Slot** boundary is a no-op and does not wrap.
+- A **Move Mark Action** refreshes recent-use status for the moved **Window Mark** but not for the displaced **Window Mark**.
+- After a **Move Mark Action**, selection follows the moved **Window Mark** to its new **Mark Slot**.
+- Dragging a **Window Mark** onto another **Mark Slot** directly swaps those two **Mark Slots**.
+- Dragging a **Window Mark** onto an empty **Mark Slot** directly swaps with the empty **Mark Slot**.
 - A **Window Mark** stores niri window id, **Window Label**, marked-at time, and used-at time.
 - A **Window Mark** points at zero or one **Niri Window** after stale-window cleanup.
 - A **Stale Window Mark** is cleared automatically when its **Niri Window** disappears from the **Window Catalog**, and automatic cleanup notifies the user.
@@ -119,7 +163,7 @@ _Avoid_: launcher, widget, slot editor
 - Successful jumps do not notify the user because focus change is feedback.
 - Jumping to an empty **Mark Slot** notifies the user instead of failing silently.
 - Jumping to a **Stale Window Mark** clears it and notifies the user.
-- **Window Marks** do not persist across DMS restart, niri restart, logout, or reboot.
+- **Window Marks**, their order, and **Custom Display Names** do not persist across DMS restart, niri restart, logout, or reboot.
 
 ## Example dialogue
 
@@ -128,9 +172,12 @@ _Avoid_: launcher, widget, slot editor
 
 ## Testing notes
 
+- Automated tests should cover renaming an occupied **Mark Slot**, clearing a **Custom Display Name**, rejecting invalid and too-long display names, preserving **Custom Display Name** on re-mark, and clearing **Custom Display Name** on replacement.
+- Automated tests should cover swapping occupied and empty **Mark Slots**, no-op same-slot swaps, invalid swaps, selection-independent swap semantics, and LRU refresh for moved **Window Marks**.
 - Automated tests should cover clearing an occupied **Mark Slot** without shifting other **Mark Slots**.
 - Automated tests should cover clearing an empty **Mark Slot**, invalid clear slots, clearing all occupied **Mark Slots**, and clearing all when no **Window Marks** exist.
 - **Mark Overview** behavior is verified with manual DMS/niri smoke tests because it depends on live QML modal and compositor focus behavior.
+- Manual smoke tests should cover `R` rename modal, per-row rename control, `Ctrl+Shift+J/K` keyboard move, drag-handle direct swap, and updated footer hints.
 
 ## Flagged ambiguities
 

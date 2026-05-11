@@ -205,3 +205,48 @@ test('Window Catalog sync can silently clear Stale Window Marks for overview ope
   });
   expect(commands.status().slots[0].mark).toBe(null);
 });
+
+test('rename IPC maps Custom Display Name results and stays quiet', () => {
+  const { adapter } = fakeAdapter({
+    windows: () => [{ id: 7, app_id: 'Alacritty', title: 'shell', is_focused: true }],
+  });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+
+  expect(commands.renameSlot(1, 'term')).toEqual({ ipc: 'RENAMED_SLOT_1', notifications: [] });
+  expect(commands.status().slots[0].mark.customDisplayName).toBe('term');
+  expect(commands.renameSlot(1, '  ')).toEqual({ ipc: 'CLEARED_NAME_SLOT_1', notifications: [] });
+  expect(commands.renameSlot(2, 'name')).toEqual({ ipc: 'EMPTY_SLOT_2', notifications: [] });
+  expect(commands.renameSlot(9, 'name')).toEqual({ ipc: 'INVALID_SLOT', notifications: [] });
+  expect(commands.renameSlot(1, 'x'.repeat(81))).toEqual({ ipc: 'DISPLAY_NAME_TOO_LONG', notifications: [] });
+});
+
+test('mark notifications use Custom Display Name when present', () => {
+  let windows = [{ id: 7, app_id: 'Alacritty', title: 'shell', is_focused: true }];
+  const { adapter } = fakeAdapter({ windows: () => windows });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+  commands.renameSlot(1, 'term');
+
+  windows = [{ id: 7, app_id: 'Alacritty', title: 'renamed raw title', is_focused: true }];
+  expect(commands.markFocused()).toEqual({
+    ipc: 'MARK_REFRESHED_SLOT_1',
+    notifications: ['Refreshed Mark Slot 1: Alacritty — term'],
+  });
+});
+
+test('swap IPC maps Move Mark Action results and stays quiet', () => {
+  const { adapter } = fakeAdapter({
+    windows: () => [
+      { id: 1, app_id: 'a', title: 'one', is_focused: true },
+      { id: 2, app_id: 'b', title: 'two' },
+    ],
+  });
+  const commands = createHarpoonCommands({ adapter, now: () => 1000 });
+  commands.markFocused();
+
+  expect(commands.swapSlots(1, 3)).toEqual({ ipc: 'SWAPPED_SLOTS_1_3', notifications: [] });
+  expect(commands.status().slots.map(slot => slot.mark && slot.mark.windowId)).toEqual([null, null, 1, null, null]);
+  expect(commands.swapSlots(3, 3)).toEqual({ ipc: 'SWAP_NOOP_SLOT_3', notifications: [] });
+  expect(commands.swapSlots(0, 3)).toEqual({ ipc: 'INVALID_SLOT', notifications: [] });
+});

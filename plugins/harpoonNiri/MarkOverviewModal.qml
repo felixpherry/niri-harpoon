@@ -13,9 +13,32 @@ DankModal {
     property bool keyboardNavigationActive: true
     property string pendingAction: ""
     property int pendingSlot: 0
+    property string renameText: ""
+    property string renameError: ""
+    property bool renameVisible: false
+    property int dragSourceSlot: 0
+    property int dragHoverSlot: 0
 
     readonly property int rowHeight: 72
     readonly property bool hasMarks: slots.some(slot => slot.mark !== null)
+
+    onRenameVisibleChanged: {
+        if (!renameVisible)
+            return;
+        shouldHaveFocus = true;
+        Qt.callLater(function () {
+            modalFocusScope.forceActiveFocus();
+            const input = contentLoader.item && contentLoader.item.renameInput;
+            if (!input)
+                return;
+            input.forceActiveFocus();
+            input.selectAll();
+            Qt.callLater(function () {
+                input.forceActiveFocus();
+                input.selectAll();
+            });
+        });
+    }
 
     function show() {
         if (backend && backend.onOverviewOpening)
@@ -84,6 +107,42 @@ DankModal {
         keyboardNavigationActive = selectedIndex >= 0;
     }
 
+    function moveSelected(direction) {
+        if (selectedIndex < 0)
+            return;
+        const source = slotAt(selectedIndex);
+        if (!source || !source.mark)
+            return;
+        const targetIndex = selectedIndex + direction;
+        if (targetIndex < 0 || targetIndex >= 5)
+            return;
+        if (backend && backend.swapOverviewSlots)
+            backend.swapOverviewSlots(selectedIndex + 1, targetIndex + 1);
+        selectedIndex = targetIndex;
+        keyboardNavigationActive = true;
+        refreshSlots();
+    }
+
+    function dropDraggedSlot(targetSlot) {
+        if (dragSourceSlot <= 0 || targetSlot < 1 || targetSlot > 5)
+            return;
+        if (backend && backend.swapOverviewSlots)
+            backend.swapOverviewSlots(dragSourceSlot, targetSlot);
+        selectedIndex = targetSlot - 1;
+        keyboardNavigationActive = true;
+        dragSourceSlot = 0;
+        refreshSlots();
+    }
+
+    function targetSlotFromRowsY(y) {
+        const stride = rowHeight + Theme.spacingXS;
+        const targetIndex = Math.floor(y / stride);
+        const rowOffset = y - targetIndex * stride;
+        if (targetIndex < 0 || targetIndex >= 5 || rowOffset < 0 || rowOffset > rowHeight)
+            return 0;
+        return targetIndex + 1;
+    }
+
     function activateSlot(slotNumber) {
         const slot = slotAt(slotNumber - 1);
         if (!slot || !slot.mark)
@@ -91,6 +150,48 @@ DankModal {
         if (backend && backend.activateOverviewSlot)
             backend.activateOverviewSlot(slotNumber);
         hide();
+    }
+
+    function displayTitle(mark) {
+        if (!mark || !mark.label)
+            return "No title";
+        return mark.customDisplayName && mark.customDisplayName.length > 0 ? mark.customDisplayName : (mark.label.title || "No title");
+    }
+
+    function hasDisplayTitle(mark) {
+        return !!mark && !!mark.label && ((mark.customDisplayName && mark.customDisplayName.length > 0) || (mark.label.title && mark.label.title.length > 0));
+    }
+
+    function requestRenameSlot(slotNumber) {
+        const slot = slotAt(slotNumber - 1);
+        if (!slot || !slot.mark)
+            return;
+        pendingAction = "rename";
+        pendingSlot = slotNumber;
+        renameText = slot.mark.customDisplayName && slot.mark.customDisplayName.length > 0 ? slot.mark.customDisplayName : (slot.mark.label.title || "");
+        renameError = "";
+        renameVisible = true;
+        root.shouldHaveFocus = true;
+    }
+
+    function finishRename(save) {
+        if (save && backend && backend.renameOverviewSlot) {
+            const result = backend.renameOverviewSlot(pendingSlot, renameText);
+            if (result === "DISPLAY_NAME_TOO_LONG") {
+                renameError = "Custom Display Name must be 80 characters or less.";
+                const input = contentLoader.item && contentLoader.item.renameInput;
+                if (input)
+                    input.forceActiveFocus();
+                return;
+            }
+            refreshSlots();
+        }
+        renameVisible = false;
+        pendingAction = "";
+        pendingSlot = 0;
+        renameError = "";
+        root.shouldHaveFocus = true;
+        Qt.callLater(function () { modalFocusScope.forceActiveFocus(); });
     }
 
     function requestClearSlot(slotNumber) {
@@ -166,6 +267,11 @@ DankModal {
     onDialogClosed: {
         pendingAction = "";
         pendingSlot = 0;
+        renameVisible = false;
+        renameText = "";
+        renameError = "";
+        dragSourceSlot = 0;
+        dragHoverSlot = 0;
     }
 
     modalFocusScope.Keys.onPressed: function (event) {
@@ -173,6 +279,9 @@ DankModal {
             event.accepted = true;
             return;
         }
+
+        if (renameVisible)
+            return;
 
         switch (event.key) {
         case Qt.Key_Escape:
@@ -198,6 +307,11 @@ DankModal {
                 requestClearSlot(selectedIndex + 1);
             event.accepted = true;
             return;
+        case Qt.Key_R:
+            if (selectedIndex >= 0)
+                requestRenameSlot(selectedIndex + 1);
+            event.accepted = true;
+            return;
         case Qt.Key_1:
         case Qt.Key_2:
         case Qt.Key_3:
@@ -209,13 +323,20 @@ DankModal {
         }
 
         if (event.modifiers & Qt.ControlModifier) {
+            const shiftHeld = event.modifiers & Qt.ShiftModifier;
             switch (event.key) {
             case Qt.Key_J:
-                selectNext();
+                if (shiftHeld)
+                    moveSelected(1);
+                else
+                    selectNext();
                 event.accepted = true;
                 return;
             case Qt.Key_K:
-                selectPrevious();
+                if (shiftHeld)
+                    moveSelected(-1);
+                else
+                    selectPrevious();
                 event.accepted = true;
                 return;
             }
@@ -224,6 +345,8 @@ DankModal {
 
     content: Component {
         Item {
+            property alias renameInput: renameInput
+
             anchors.fill: parent
 
             Column {
@@ -276,6 +399,7 @@ DankModal {
                 }
 
                 Column {
+                    id: slotsColumn
                     width: parent.width
                     spacing: Theme.spacingXS
 
@@ -286,11 +410,14 @@ DankModal {
                             id: row
                             required property int index
                             required property var modelData
+                            property int slotNumber: modelData.slot
 
                             width: parent.width
                             height: root.rowHeight
                             radius: Theme.cornerRadius
                             color: {
+                                if (root.dragHoverSlot === modelData.slot)
+                                    return Theme.primaryHoverLight;
                                 if (modelData.mark && root.keyboardNavigationActive && root.selectedIndex === index)
                                     return Theme.primaryPressed;
                                 return rowMouse.containsMouse && modelData.mark ? Theme.primaryHoverLight : Theme.withAlpha(Theme.surfaceContainerHigh, Theme.popupTransparency);
@@ -334,7 +461,7 @@ DankModal {
                             Column {
                                 anchors.left: appIcon.right
                                 anchors.leftMargin: Theme.spacingM
-                                anchors.right: clearButton.left
+                                anchors.right: dragHandle.left
                                 anchors.rightMargin: Theme.spacingM
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Theme.spacingXS
@@ -350,13 +477,78 @@ DankModal {
                                 }
 
                                 StyledText {
-                                    text: modelData.mark ? (modelData.mark.label.title || "No title") : "No Window Mark"
+                                    text: modelData.mark ? root.displayTitle(modelData.mark) : "No Window Mark"
                                     font.pixelSize: Theme.fontSizeMedium
-                                    color: modelData.mark && modelData.mark.label.title ? Theme.surfaceText : Theme.surfaceVariantText
+                                    color: root.hasDisplayTitle(modelData.mark) ? Theme.surfaceText : Theme.surfaceVariantText
                                     width: parent.width
                                     elide: Text.ElideRight
                                     textFormat: Text.PlainText
                                 }
+                            }
+
+                            Rectangle {
+                                id: dragHandle
+                                anchors.right: renameButton.left
+                                anchors.rightMargin: Theme.spacingXS
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 32
+                                height: 32
+                                radius: Theme.cornerRadius / 2
+                                color: dragHandleMouse.containsMouse ? Theme.surfaceVariantAlpha : "transparent"
+                                visible: modelData.mark !== null
+                                z: 2
+
+                                DankIcon {
+                                    anchors.centerIn: parent
+                                    name: "drag_indicator"
+                                    size: Theme.iconSize - 6
+                                    color: Theme.surfaceText
+                                }
+
+                                MouseArea {
+                                    id: dragHandleMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    preventStealing: true
+                                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                                    onPressed: function (mouse) {
+                                        root.dragSourceSlot = modelData.slot;
+                                        const point = mapToItem(slotsColumn, mouse.x, mouse.y);
+                                        root.dragHoverSlot = root.targetSlotFromRowsY(point.y);
+                                    }
+                                    onPositionChanged: function (mouse) {
+                                        if (!pressed)
+                                            return;
+                                        const point = mapToItem(slotsColumn, mouse.x, mouse.y);
+                                        root.dragHoverSlot = root.targetSlotFromRowsY(point.y);
+                                    }
+                                    onReleased: function (mouse) {
+                                        const point = mapToItem(slotsColumn, mouse.x, mouse.y);
+                                        const targetSlot = root.targetSlotFromRowsY(point.y);
+                                        if (targetSlot > 0)
+                                            root.dropDraggedSlot(targetSlot);
+                                        root.dragSourceSlot = 0;
+                                        root.dragHoverSlot = 0;
+                                    }
+                                    onCanceled: {
+                                        root.dragSourceSlot = 0;
+                                        root.dragHoverSlot = 0;
+                                    }
+                                }
+                            }
+
+                            DankActionButton {
+                                id: renameButton
+                                anchors.right: clearButton.left
+                                anchors.rightMargin: Theme.spacingXS
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconName: "edit"
+                                iconSize: Theme.iconSize - 6
+                                iconColor: Theme.surfaceText
+                                tooltipText: "Rename Mark Slot " + modelData.slot
+                                visible: modelData.mark !== null
+                                z: 2
+                                onClicked: root.requestRenameSlot(modelData.slot)
                             }
 
                             DankActionButton {
@@ -369,15 +561,17 @@ DankModal {
                                 iconColor: Theme.surfaceText
                                 tooltipText: "Clear Mark Slot " + modelData.slot
                                 visible: modelData.mark !== null
+                                z: 2
                                 onClicked: root.requestClearSlot(modelData.slot)
                             }
 
                             MouseArea {
                                 id: rowMouse
                                 anchors.fill: parent
-                                anchors.rightMargin: modelData.mark ? 48 : 0
+                                anchors.rightMargin: modelData.mark ? 136 : 0
                                 hoverEnabled: true
                                 cursorShape: modelData.mark ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                z: 0
                                 onClicked: root.activateSlot(modelData.slot)
                             }
                         }
@@ -392,7 +586,9 @@ DankModal {
                     Repeater {
                         model: [
                             { key: "1–5", label: "Jump" },
-                            { key: "Ctrl J/K", label: "Move" },
+                            { key: "Ctrl J/K", label: "Select" },
+                            { key: "Ctrl+Shift+J/K", label: "Move" },
+                            { key: "R", label: "Rename" },
                             { key: "Del", label: "Clear" },
                             { key: "Esc", label: "Close" }
                         ]
@@ -427,6 +623,90 @@ DankModal {
                                 text: modelData.label
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.surfaceVariantText
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.renameVisible
+                anchors.fill: parent
+                color: Theme.withAlpha(Theme.surfaceContainer, 0.72)
+                radius: Theme.cornerRadius
+
+                MouseArea {
+                    anchors.fill: parent
+                }
+
+                Rectangle {
+                    width: Math.min(parent.width - Theme.spacingL * 2, 460)
+                    height: renameErrorText.visible ? 178 : 150
+                    anchors.centerIn: parent
+                    radius: Theme.cornerRadius
+                    color: Theme.surfaceContainerHigh
+                    border.color: Theme.outlineMedium
+                    border.width: 1
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingM
+                        spacing: Theme.spacingM
+
+                        StyledText {
+                            text: "Rename Mark Slot " + root.pendingSlot
+                            font.pixelSize: Theme.fontSizeLarge
+                            font.weight: Font.Medium
+                            color: Theme.surfaceText
+                        }
+
+                        DankTextField {
+                            id: renameInput
+                            width: parent.width
+                            text: root.renameText
+                            placeholderText: "Custom Display Name"
+                            leftIconName: "edit"
+                            showClearButton: true
+                            focus: root.renameVisible
+                            ignoreTabKeys: true
+                            keyForwardTargets: [root.modalFocusScope]
+                            onTextChanged: root.renameText = text
+                            Keys.onPressed: function (event) {
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    root.finishRename(true);
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (event.key === Qt.Key_Escape) {
+                                    root.finishRename(false);
+                                    event.accepted = true;
+                                    return;
+                                }
+                            }
+                        }
+
+                        StyledText {
+                            id: renameErrorText
+                            text: root.renameError
+                            visible: root.renameError.length > 0
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.primary
+                        }
+
+                        Row {
+                            anchors.right: parent.right
+                            spacing: Theme.spacingS
+
+                            DankActionButton {
+                                iconName: "close"
+                                tooltipText: "Cancel"
+                                onClicked: root.finishRename(false)
+                            }
+
+                            DankActionButton {
+                                iconName: "check"
+                                tooltipText: "Save"
+                                onClicked: root.finishRename(true)
                             }
                         }
                     }

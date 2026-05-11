@@ -46,7 +46,7 @@ function createHarpoonCommands(options) {
         const markResult = state.mark(focused);
         const slot = markResult.slot;
         const mark = state.status().slots[slot - 1].mark;
-        const label = labels.labelText(mark.label);
+        const label = labels.labelText(Object.assign({}, mark.label, { customDisplayName: mark.customDisplayName }));
 
         if (markResult.code === "MARK_REFRESHED")
             return result(`MARK_REFRESHED_SLOT_${slot}`, [`Refreshed Mark Slot ${slot}: ${label}`]);
@@ -99,6 +99,42 @@ function createHarpoonCommands(options) {
         return result(clearResult.code === "CLEARED_ALL" ? "CLEARED_ALL" : "NO_MARKS");
     }
 
+    function renameSlot(slot, displayName) {
+        const renameResult = state.rename(slot, displayName);
+
+        if (renameResult.code === "RENAMED_SLOT")
+            return result(`RENAMED_SLOT_${renameResult.slot}`);
+
+        if (renameResult.code === "CLEARED_NAME_SLOT")
+            return result(`CLEARED_NAME_SLOT_${renameResult.slot}`);
+
+        if (renameResult.code === "EMPTY_SLOT")
+            return result(`EMPTY_SLOT_${renameResult.slot}`);
+
+        if (renameResult.code === "INVALID_SLOT")
+            return result("INVALID_SLOT");
+
+        if (renameResult.code === "DISPLAY_NAME_TOO_LONG")
+            return result("DISPLAY_NAME_TOO_LONG");
+
+        return result("RENAME_FAILED");
+    }
+
+    function swapSlots(sourceSlot, targetSlot) {
+        const swapResult = state.swap(sourceSlot, targetSlot);
+
+        if (swapResult.code === "SWAPPED_SLOTS")
+            return result(`SWAPPED_SLOTS_${swapResult.sourceSlot}_${swapResult.targetSlot}`);
+
+        if (swapResult.code === "SWAP_NOOP_SLOT")
+            return result(`SWAP_NOOP_SLOT_${swapResult.slot}`);
+
+        if (swapResult.code === "INVALID_SLOT")
+            return result("INVALID_SLOT");
+
+        return result("SWAP_FAILED");
+    }
+
     function syncWindowCatalog(silent) {
         if (!isNiriAvailable())
             return { clearedSlots: [], notifications: [] };
@@ -111,7 +147,7 @@ function createHarpoonCommands(options) {
         };
     }
 
-    return { status, markFocused, jumpSlot, clearSlot, clearAll, syncWindowCatalog };
+    return { status, markFocused, jumpSlot, clearSlot, clearAll, renameSlot, swapSlots, syncWindowCatalog };
 }
 
 if (typeof module !== "undefined") {
